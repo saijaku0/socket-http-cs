@@ -1,2 +1,4 @@
-﻿var server = new HttpServer.Server(8080);
+﻿using HttpServer;
+
+Server server = new(request => throw new Exception("boom"));
 await server.StartAsync();

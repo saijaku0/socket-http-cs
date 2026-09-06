@@ -4,53 +4,61 @@ using System.Text;
 
 namespace HttpServer;
 
-public class Server(int port)
+public class Server
 {
+    private readonly IPEndPoint _ipEndPoint;
+    private readonly Func<HttpRequest, HttpResponse> _handler;
+
+    public Server(
+        Func<HttpRequest, HttpResponse> handler,
+        string ipAddress = "127.0.0.1",
+        int port = 8080)
+    {
+        if (!IPAddress.TryParse(ipAddress, out IPAddress? address))
+            throw new ArgumentException("IPAddress is incorect");
+
+        _ipEndPoint = new IPEndPoint(address, port);
+        _handler = handler;
+    }
+
     public async Task StartAsync()
     {
-        IPEndPoint ipEndPoint = new(IPAddress.Any, port);
-        using Socket socket = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        using Socket socket = new(
+            AddressFamily.InterNetwork,
+            SocketType.Stream,
+            ProtocolType.Tcp);
 
-        try
-        {
-            socket.Bind(ipEndPoint);
-            Console.WriteLine($"[BIND] Bound to {ipEndPoint}");
-
-            socket.Listen(10);
-            Console.WriteLine($"[LISTEN] Listening on {ipEndPoint}...");
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine($"[FATAL] Failed to start server: {e.Message}");
-            return;
-        }
+        socket.Bind(_ipEndPoint);
+        socket.Listen(10);
+        Console.WriteLine($"[LISTEN] Listening on {_ipEndPoint}...");
 
         while (true)
         {
             try
             {
                 using Socket client = await socket.AcceptAsync();
-                Console.WriteLine($"[CONNECT] Connected: {client.RemoteEndPoint}");
 
                 byte[] bytes = new byte[1024];
                 int bytesRead = client.Receive(bytes);
                 if(bytesRead == 0)
-                {
-                    Console.WriteLine("[EMPTY] Received 0 bytes from client, closing connection.");
                     continue;
-                }
+
                 string data = Encoding.UTF8.GetString(bytes, 0, bytesRead);
-
                 HttpRequest request = HttpRequest.Parse(data);
-                Console.WriteLine($"[REQUEST] {request.Method} {request.Target} {request.Version}");
-                foreach (var (key, value) in request.Headers)
-                    Console.WriteLine($"  {key}: {value}");
 
-                byte[] responseBytes = HttpResponse.CreateResponse("Hello, World!");
-                client.Send(responseBytes);
+                HttpResponse response;
+                try
+                {
+                    response = _handler(request);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine($"[HANDLER] Handler threw: {e.Message}");
+                    response = new HttpResponse(500, "Internal Server Error");
+                }
 
+                client.Send(response.ToBytes());
                 client.Shutdown(SocketShutdown.Both);
-                Console.WriteLine("[CLOSE] Connection with client is closed\n");
             }
             catch (Exception e)
             {

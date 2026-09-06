@@ -43,6 +43,8 @@ public class Server(int port)
 
                 HttpRequest request = HttpRequest.Parse(data);
                 Console.WriteLine($"[REQUEST] {request.Method} {request.Target} {request.Version}");
+                foreach (var (key, value) in request.Headers)
+                    Console.WriteLine($"  {key}: {value}");
 
                 byte[] responseBytes = HttpResponse.CreateResponse("Hello, World!");
                 client.Send(responseBytes);

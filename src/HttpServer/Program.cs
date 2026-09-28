@@ -1,4 +1,4 @@
 ﻿using HttpServer;
 
-Server server = new(request => throw new Exception("boom"));
+Server server = new(request => new HttpResponse(200, "Hello World"));
 await server.StartAsync();
